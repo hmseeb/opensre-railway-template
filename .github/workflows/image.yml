@@ -1,0 +1,46 @@
+name: Build and push image
+
+on:
+  push:
+    branches: [main]
+    paths: ["image/**", "test/**", ".github/workflows/image.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Gate the push on the contract: an upstream bump that changes the
+      # gateway boot, the auth shape or the state dir must fail here.
+      - uses: docker/build-push-action@v6
+        with:
+          context: image
+          load: true
+          tags: opensre-railway:test
+          cache-from: type=gha
+      - name: Contract test
+        timeout-minutes: 8
+        run: bash test/contract.sh opensre-railway:test
+      - uses: docker/build-push-action@v6
+        with:
+          context: image
+          push: true
+          # Railway runs amd64.
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/opensre-railway:0.1.2026.11.19
+            ghcr.io/${{ github.repository_owner }}/opensre-railway:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
