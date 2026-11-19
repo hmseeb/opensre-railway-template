@@ -1,0 +1,66 @@
+{
+  "$note": "Build sheet for the OpenSRE template. upsert.py turns this into the Railway template (Auromations); it is the regeneration master. Upstream: Tracer-Cloud/opensre, release v0.1.2026.11.19 (main 29d9ba6). One service: `opensre gateway start --foreground` runs the web app (health, POST /alerts, POST /v1/prompt), the task scheduler, and any chat transport whose credentials are set. Upstream's MODE=web serves only health+alerts with no prompt queue (/v1/prompt answers prompt_intake_unavailable), and MODE=scheduler/gateway split would need a shared OPENSRE_HOME volume, which Railway cannot attach to two services.",
+  "name": "OpenSRE",
+  "services": {
+    "OpenSRE": {
+      "icon": "https://raw.githubusercontent.com/hmseeb/opensre-railway-template/main/assets/icon.png",
+      "source": {
+        "$note": "Built from image/ in this repo by .github/workflows/image.yml: upstream's Dockerfile toolchain (gh, node, codex) plus the pinned release binary baked at build time. Upstream's own image downloads the rolling main build on every start, which is not on the volume, so every Railway restart would re-download and drift. Upstream's GHCR image was last pushed 2026-07-28 and is stale.",
+        "image": "ghcr.io/hmseeb/opensre-railway:0.1.2026.11.19"
+      },
+      "deploy": {
+        "$note": "/readyz flips to 200 once the gateway reports ready, independent of whether the LLM key is valid, so a deployer who has not pasted a key yet still gets a running service. /health answers 503 until an LLM is configured. Local boot to ready: ~3s.",
+        "startCommand": "/usr/local/bin/opensre-railway-entrypoint",
+        "healthcheckPath": "/readyz",
+        "restartPolicyType": "ON_FAILURE"
+      },
+      "volumeMounts": {
+        "$note": "Volume at /data, state in /data/opensre (OPENSRE_HOME). The entrypoint creates the subdir below lost+found and chowns it to uid 1000 before dropping privileges.",
+        "mountPath": "/data"
+      },
+      "networking": {
+        "port": 8000
+      },
+      "variables": {
+        "PORT": {
+          "defaultValue": "8000",
+          "description": "Port the gateway's web app listens on."
+        },
+        "OPENSRE_HOME": {
+          "defaultValue": "/data/opensre",
+          "description": "Where sessions, memory, scheduled tasks and the prompt log live. On the volume."
+        },
+        "OPENSRE_GATEWAY_LISTENER_TOKEN": {
+          "$note": "Without it, require_local_or_token() (infrastructure/alert_intake.py) answers 403 to every non-loopback caller, so the public URL would be useless. With it, /alerts and /v1/prompt demand `Authorization: Bearer <token>`.",
+          "defaultValue": "${{secret(48)}}",
+          "description": "Bearer token for POST /alerts and /v1/prompt. Generated per deploy; copy it from Variables."
+        },
+        "LLM_PROVIDER": {
+          "defaultValue": "anthropic",
+          "description": "anthropic, openai, openrouter, gemini, deepseek, groq, bedrock... Set the matching key below."
+        },
+        "ANTHROPIC_API_KEY": {
+          "$note": "Optional so OpenAI/OpenRouter users are not forced to paste a dummy. /readyz does not depend on it; /health reports llm_configured.",
+          "isOptional": true,
+          "description": "Anthropic API key, used when LLM_PROVIDER=anthropic."
+        },
+        "OPENAI_API_KEY": {
+          "isOptional": true,
+          "description": "OpenAI API key, used when LLM_PROVIDER=openai."
+        },
+        "OPENROUTER_API_KEY": {
+          "isOptional": true,
+          "description": "OpenRouter API key, used when LLM_PROVIDER=openrouter."
+        },
+        "TELEGRAM_BOT_TOKEN": {
+          "isOptional": true,
+          "description": "Optional. Chat with OpenSRE from Telegram. Bot token from @BotFather."
+        },
+        "TELEGRAM_ALLOWED_USERS": {
+          "isOptional": true,
+          "description": "Comma-separated Telegram user IDs allowed to DM the bot (get yours from @userinfobot)."
+        }
+      }
+    }
+  }
+}
