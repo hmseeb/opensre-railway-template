@@ -1,6 +1,6 @@
 # OpenSRE on Railway
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/o_NCdm)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/opensre)
 
 One-service Railway template for the [OpenSRE](https://github.com/Tracer-Cloud/opensre) gateway: the AI SRE agent's HTTP prompt API, scheduler and optional Telegram/Slack/Discord chat, with state on a volume.
 
